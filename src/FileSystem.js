@@ -1,54 +1,66 @@
-import {join, resolve} from "node:path";
 import {homedir} from "os";
-import {readdir} from "fs/promises";
+import {resolve} from "node:path";
+import {InvalidInputError, OperationFailedError} from "./errors.js";
 
 export class Processor {
     #commandExecutor;
     #commandParser;
-    #currentPath = homedir()
+    #userName;
+    currentPath = homedir()
 
-    constructor(commandParser, commandExecutor) {
+    constructor(commandParser, commandExecutor, userName) {
         this.#commandExecutor = commandExecutor;
         this.#commandParser = commandParser;
+        this.#userName = userName
     }
 
-    changeCurrentPath = (path) => {
+    changeCurrentPath(path){
         if (path) {
-            this.#currentPath = path
+            this.currentPath = path
         } else {
-            // TODO: log error
+            throw new OperationFailedError()
         }
     }
 
     execCommand(buffer) {
         const context = {
-            currentPath: this.#currentPath,
-            changeCurrentPath: this.changeCurrentPath
+            currentPath: this.currentPath,
+            changeCurrentPath: (path) => this.changeCurrentPath(path),
         }
-        console.log('\x1b[36m%s\x1b[0m', this.#currentPath)
         const parsedCommand = this.#commandParser.parse(buffer);
-        console.log(parsedCommand, 'parsedCommand')
-        this.#commandExecutor.executeCommand(context, parsedCommand)
-        console.log('\x1b[36m%s\x1b[0m', this.#currentPath)
+        try {
+            this.#commandExecutor.executeCommand(context, parsedCommand)
+            console.log('\x1b[36m%s\x1b[0m', this.currentPath)
+        } catch (error) {
+            console.log(error.message)
+        }
     }
 }
 
 export class CommandExecutor {
-    commandMap = {
-        cd: new CommandCd(),
-        up: new CommandUp(),
-        ls: new CommandLs(),
+    #commandMap = [];
+
+    constructor(commandMap) {
+        this.#commandMap = commandMap
     }
 
     executeCommand(ctx, data) {
         const [command, args] = data;
-        console.log(command, 'command')
-        const commandEntity = this.commandMap[command];
+        const commandEntity = this.#commandMap[command];
+        const resolveArguments = (args?.args || []).map(arg => resolve(ctx.currentPath, arg))
 
-        if (commandEntity) {
-            commandEntity.exec(ctx, args?.args || {})
-        } else {
-            // TODO: implement error log
+        try {
+            if (commandEntity) {
+                commandEntity.exec(ctx, resolveArguments)
+            } else {
+                throw new InvalidInputError()
+            }
+        } catch (error) {
+            if (error instanceof InvalidInputError) {
+                console.log(error.message)
+            } else {
+                throw new OperationFailedError()
+            }
         }
     }
 }
@@ -56,59 +68,19 @@ export class CommandExecutor {
 export class CommandParser {
     parse(data) {
         const stringData = data.toString();
+
+        // return [command, {args: string[]}]
         return stringData.split(' ').reduce((acc, arg, idx) => {
             if (idx === 0) {
                 return [arg.trim()]
             }
-            return [...acc, {args: [...(acc.args || []), arg.trim()]}]
+            acc[1] = {
+                args: [...(acc[1]?.args || []), Boolean(arg) ? arg.trim() : null].filter(Boolean)
+            }
+            return acc
         }, [])
     }
 }
 
-// commands
-export class Command {
-    exec() {
-    }
-}
 
-export class CommandUp extends Command {
-    exec(ctx) {
-        if (ctx.currentPath !== homedir()) {
-            const modifiedPath = join(ctx.currentPath, '..')
-            ctx.changeCurrentPath(modifiedPath)
-        }
-    }
-}
-
-export class CommandCd extends Command {
-    exec(ctx, args) {
-        if (args) {
-            const modifiedPath = resolve(ctx.currentPath, ...args);
-            ctx.changeCurrentPath(modifiedPath)
-        }
-    }
-}
-
-export class CommandLs extends Command {
-    async exec(ctx) {
-        try {
-            const files = await readdir(ctx.currentPath, {withFileTypes: true});
-            const tableData = Object.entries(files).map(([idx, file]) => {
-                const isFile = file.isFile();
-                const isDirectory = file.isDirectory();
-                const name = file.name;
-                const type = isFile ? 'file' : 'directory'
-
-                if (isFile || isDirectory) {
-                    return {Name: name, Type: type}
-                }
-                return null
-            }).filter(Boolean).sort(({Type}) => Type === 'directory' ? -1 : 1)
-
-            console.table(tableData, ['Name', 'Type'])
-        } catch (e) {
-            // TODO: log error
-        }
-    }
-}
 
