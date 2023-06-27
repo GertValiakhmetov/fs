@@ -1,5 +1,5 @@
-import {join, parse} from "node:path";
-import {mkdir, open, readdir, readFile, rename, unlink, writeFile} from "fs/promises";
+import {join, parse, resolve} from "node:path";
+import {access, mkdir, open, readdir, readFile, rename, unlink, writeFile} from "fs/promises";
 import {arch, cpus, EOL, homedir, hostname} from "os";
 import {createReadStream, createWriteStream} from "fs";
 import {createHash} from "crypto";
@@ -8,12 +8,12 @@ import {InvalidInputError} from "./errors.js";
 
 
 export class Command {
-    exec() {
+    async exec() {
     }
 }
 
 export class CommandUp extends Command {
-    exec(ctx) {
+    async exec(ctx) {
         if (ctx.currentPath !== homedir()) {
             const modifiedPath = join(ctx.currentPath, '..')
             ctx.changeCurrentPath(modifiedPath)
@@ -22,12 +22,14 @@ export class CommandUp extends Command {
 }
 
 export class CommandCd extends Command {
-    exec(ctx, args) {
+    async exec(ctx, args) {
         if (!args.length) {
             throw new InvalidInputError()
         }
 
         if (args) {
+            await access(resolve(ctx.currentPath, args.join('')))
+
             ctx.changeCurrentPath(args.join(''))
         }
     }
@@ -35,24 +37,21 @@ export class CommandCd extends Command {
 
 export class CommandLs extends Command {
     async exec(ctx) {
-        try {
-            const files = await readdir(ctx.currentPath, {withFileTypes: true});
-            const tableData = Object.entries(files).map(([_idx, file]) => {
-                const isFile = file.isFile();
-                const isDirectory = file.isDirectory();
-                const name = file.name;
-                const type = isFile ? 'file' : 'directory'
+        const files = await readdir(ctx.currentPath, {withFileTypes: true});
+        const tableData = Object.entries(files).map(([_idx, file]) => {
+            const isFile = file.isFile();
+            const isDirectory = file.isDirectory();
+            const name = file.name;
+            const type = isFile ? 'file' : 'directory'
 
-                if (isFile || isDirectory) {
-                    return {Name: name, Type: type}
-                }
-                return null
-            }).filter(Boolean).sort(({Type}) => Type === 'directory' ? -1 : 1)
+            if (isFile || isDirectory) {
+                return {Name: name, Type: type}
+            }
+            return null
+        }).filter(Boolean).sort(({Type}) => Type === 'directory' ? -1 : 1)
 
-            console.table(tableData, ['Name', 'Type'])
-        } catch (e) {
-            console.error(e)
-        }
+        console.table(tableData, ['Name', 'Type'])
+
     }
 }
 
@@ -62,12 +61,8 @@ export class CommandCat extends Command {
             throw new InvalidInputError()
         }
 
-        try {
-            const fd = await open(args.join(''), 'r');
-            fd.createReadStream().pipe(process.stdout);
-        } catch (e) {
-            console.error(e)
-        }
+        const fd = await open(args.join(''), 'r');
+        fd.createReadStream().pipe(process.stdout);
     }
 }
 
@@ -77,17 +72,14 @@ export class CommandAdd extends Command {
             throw new InvalidInputError()
         }
 
-        try {
-            const parsedPath = parse(args.join(''));
+        const parsedPath = parse(args.join(''));
 
-            if (parsedPath.dir) {
-                await mkdir(args, {recursive: true});
-            }
-
-            await writeFile(args, '', {flag: 'ax+'})
-        } catch (e) {
-            console.error(e)
+        if (parsedPath.dir) {
+            await mkdir(args, {recursive: true});
         }
+
+        await writeFile(args, '', {flag: 'ax+'})
+
     }
 }
 
@@ -97,11 +89,8 @@ export class CommandRn extends Command {
             throw new InvalidInputError()
         }
 
-        try {
-            await rename(...args)
-        } catch (e) {
-            console.log(e)
-        }
+        await rename(...args)
+
     }
 }
 
@@ -111,11 +100,8 @@ export class CommandCp extends Command {
             throw new InvalidInputError()
         }
 
-        try {
-            createReadStream(args[0]).pipe(createWriteStream(args[1], {flags: 'wx'}))
-        } catch (e) {
-            console.log(e)
-        }
+        createReadStream(args[0]).pipe(createWriteStream(args[1], {flags: 'wx'}))
+
     }
 }
 
@@ -125,13 +111,9 @@ export class CommandMv extends Command {
             throw new InvalidInputError()
         }
 
-        try {
-            const readableStream = createReadStream(args[0]);
-            readableStream.pipe(createWriteStream(args[1], {flags: 'wx'}))
-            readableStream.on('end', () => unlink(args[0]))
-        } catch (e) {
-            console.log(e)
-        }
+        const readableStream = createReadStream(args[0]);
+        readableStream.pipe(createWriteStream(args[1], {flags: 'wx'}))
+        readableStream.on('end', () => unlink(args[0]))
     }
 }
 
@@ -141,11 +123,7 @@ export class CommandRm extends Command {
             throw new InvalidInputError()
         }
 
-        try {
-            unlink(args.join(''))
-        } catch (e) {
-            console.log(e)
-        }
+        await unlink(args.join(''))
     }
 }
 
@@ -158,7 +136,7 @@ export class CommandOs extends Command {
         architecture: this.architecture,
     }
 
-    exec(ctx, args) {
+    async exec(ctx, args) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -202,7 +180,7 @@ export class CommandHash extends Command {
 }
 
 export class CommandCompress extends Command {
-    exec(ctx, args) {
+    async exec(ctx, args) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -216,7 +194,7 @@ export class CommandCompress extends Command {
 }
 
 export class CommandDecompress extends Command {
-    exec(ctx, args) {
+    async exec(ctx, args) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -230,7 +208,7 @@ export class CommandDecompress extends Command {
 }
 
 export class CommandExit extends Command {
-    exec(ctx, args) {
+    async exec(ctx, args) {
         process.emit('SIGINT')
     }
 }

@@ -6,6 +6,6 @@ export class InvalidInputError extends Error {
 
 export class OperationFailedError extends Error {
     constructor() {
-        super('Invalid input');
+        super('Operation Failed');
     }
 }

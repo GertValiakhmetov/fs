@@ -22,14 +22,14 @@ export class Processor {
         }
     }
 
-    execCommand(buffer) {
+    async execCommand(buffer) {
         const context = {
             currentPath: this.currentPath,
             changeCurrentPath: (path) => this.changeCurrentPath(path),
         }
         const parsedCommand = this.#commandParser.parse(buffer);
         try {
-            this.#commandExecutor.executeCommand(context, parsedCommand)
+            await this.#commandExecutor.executeCommand(context, parsedCommand)
             console.log('\x1b[36m%s\x1b[0m', this.currentPath)
         } catch (error) {
             console.log(error.message)
@@ -44,15 +44,17 @@ export class CommandExecutor {
         this.#commandMap = commandMap
     }
 
-    executeCommand(ctx, data) {
+    async executeCommand(ctx, data) {
         const [command, args] = data;
         const commandEntity = this.#commandMap[command];
         const resolveArguments = (args?.args || []).map(arg => resolve(ctx.currentPath, arg))
 
         try {
             if (commandEntity) {
-                commandEntity.exec(ctx, resolveArguments)
+                await commandEntity.exec(ctx, resolveArguments)
             } else {
+
+                // TODO: move it to outside ;)
                 throw new InvalidInputError()
             }
         } catch (error) {
