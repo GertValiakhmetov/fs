@@ -5,7 +5,7 @@ import {commandMap} from "./commands.js";
 
 const args = process.argv;
 
-const userName = args[args.length - 1].replace('--username=', '')
+const userName = args[args.length - 1].startsWith('--username=') ? args[args.length - 1].replace('--username=', ''): ' '
 
 console.log(`Welcome to the File Manager, ${userName}`)
 
@@ -16,4 +16,12 @@ const readline = initReadline(processorCompleter(processor), userName)
 readline.on("line", data => {
     processor.execCommand(data)
 })
+
+readline.on('SIGINT', () => process.emit('SIGINT'))
+
+process.on('SIGINT', () => {
+    console.log(`Thank you for using File Manager, ${userName}, goodbye!`);
+    process.exit()
+})
+
 

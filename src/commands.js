@@ -229,6 +229,12 @@ export class CommandDecompress extends Command {
     }
 }
 
+export class CommandExit extends Command {
+    exec(ctx, args) {
+        process.emit('SIGINT')
+    }
+}
+
 export const commandMap = {
     cd: new CommandCd(),
     up: new CommandUp(),
@@ -242,5 +248,6 @@ export const commandMap = {
     os: new CommandOs(),
     hash: new CommandHash(),
     compress: new CommandCompress(),
-    decompress: new CommandDecompress()
+    decompress: new CommandDecompress(),
+    '.exit': new CommandExit()
 }
