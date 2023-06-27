@@ -47,11 +47,11 @@ export class CommandExecutor {
     async executeCommand(ctx, data) {
         const [command, args] = data;
         const commandEntity = this.#commandMap[command];
-        const resolveArguments = (args?.args || []).map(arg => resolve(ctx.currentPath, arg))
+        const resolvedArguments = (args?.args || []).map(arg => resolve(ctx.currentPath, arg))
 
         try {
             if (commandEntity) {
-                await commandEntity.exec(ctx, resolveArguments)
+                await commandEntity.exec(ctx, {resolvedArguments, rawArgs: args?.args})
             } else {
 
                 // TODO: move it to outside ;)

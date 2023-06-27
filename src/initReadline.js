@@ -4,3 +4,4 @@ export const initReadline = (completer) => {
 
     return createInterface(process.stdin, process.stdout,  completer);
 }
+

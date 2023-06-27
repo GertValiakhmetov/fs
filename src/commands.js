@@ -4,7 +4,8 @@ import {arch, cpus, EOL, homedir, hostname} from "os";
 import {createReadStream, createWriteStream} from "fs";
 import {createHash} from "crypto";
 import {createBrotliCompress, createBrotliDecompress} from "zlib";
-import {InvalidInputError} from "./errors.js";
+import {InvalidInputError, OperationFailedError} from "./errors.js";
+import {pipeline} from "stream/promises";
 
 
 export class Command {
@@ -22,7 +23,7 @@ export class CommandUp extends Command {
 }
 
 export class CommandCd extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -48,7 +49,20 @@ export class CommandLs extends Command {
                 return {Name: name, Type: type}
             }
             return null
-        }).filter(Boolean).sort(({Type}) => Type === 'directory' ? -1 : 1)
+        }).filter(Boolean).sort((file1, file2) => {
+            if (file1.Type === 'directory' && file2.Type === 'directory') {
+                return file1.Name - file2.Name
+            }
+            if (file1.Type === 'directory' && file2.Type !== 'directory') {
+                return -1
+            }
+
+            if (file1.Type !== 'directory' && file2.Type === 'directory') {
+                return 1
+            }
+
+            return file1.Name - file2.Name
+        })
 
         console.table(tableData, ['Name', 'Type'])
 
@@ -56,18 +70,18 @@ export class CommandLs extends Command {
 }
 
 export class CommandCat extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
 
         const fd = await open(args.join(''), 'r');
-        fd.createReadStream().pipe(process.stdout);
+        await pipeline(fd.createReadStream(), process.stdout)
     }
 }
 
 export class CommandAdd extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -84,7 +98,7 @@ export class CommandAdd extends Command {
 }
 
 export class CommandRn extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -95,30 +109,29 @@ export class CommandRn extends Command {
 }
 
 export class CommandCp extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
 
-        createReadStream(args[0]).pipe(createWriteStream(args[1], {flags: 'wx'}))
-
+        await pipeline(createReadStream(args[0]), createWriteStream(args[1], {flags: 'wx'}))
     }
 }
 
 export class CommandMv extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
 
         const readableStream = createReadStream(args[0]);
-        readableStream.pipe(createWriteStream(args[1], {flags: 'wx'}))
+        await pipeline(readableStream, createWriteStream(args[1], {flags: 'wx'}))
         readableStream.on('end', () => unlink(args[0]))
     }
 }
 
 export class CommandRm extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -136,7 +149,7 @@ export class CommandOs extends Command {
         architecture: this.architecture,
     }
 
-    async exec(ctx, args) {
+    async exec(ctx, {rawArgs: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -146,28 +159,28 @@ export class CommandOs extends Command {
     }
 
     eol() {
-        process.stdout(EOL)
+        console.log(JSON.stringify(EOL))
     }
 
     cpus() {
-        process.stdout(cpus())
+        console.log(cpus())
     }
 
     homedir() {
-        process.stdout(homedir())
+        console.log(homedir())
     }
 
     username() {
-        process.stdout(hostname())
+        console.log(hostname())
     }
 
     architecture() {
-        process.stdout(arch())
+        console.log(arch())
     }
 }
 
 export class CommandHash extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -175,12 +188,12 @@ export class CommandHash extends Command {
         const fileBuffer = await readFile(args.join(''));
         const hash = createHash('sha256');
         hash.update(fileBuffer);
-        process.stdout(hash.digest('hex'))
+        console.log(hash.digest('hex'))
     }
 }
 
 export class CommandCompress extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -189,12 +202,12 @@ export class CommandCompress extends Command {
         const source = createReadStream(args[0]);
         const target = createWriteStream(`${args[1]}.br`);
 
-        source.pipe(brotliCompress).pipe(target)
+        await pipeline(source, brotliCompress, target)
     }
 }
 
 export class CommandDecompress extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         if (!args.length) {
             throw new InvalidInputError()
         }
@@ -203,12 +216,12 @@ export class CommandDecompress extends Command {
         const source = createReadStream(args[0]);
         const target = createWriteStream(args[1]);
 
-        source.pipe(brotliDecompress).pipe(target)
+        await pipeline(source, brotliDecompress, target)
     }
 }
 
 export class CommandExit extends Command {
-    async exec(ctx, args) {
+    async exec(ctx, {resolvedArguments: args}) {
         process.emit('SIGINT')
     }
 }
