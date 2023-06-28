@@ -1,0 +1,23 @@
+{
+  "name": "fs1",
+  "version": "1.0.0",
+  "description": "File System",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node ./src/init.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GertValiakhmetov/fs.git"
+  },
+  "author": "Gert Valiakhmetov",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/GertValiakhmetov/fs/issues"
+  },
+  "homepage": "https://github.com/GertValiakhmetov/fs#readme",
+  "dependencies": {
+    "@types/node": "18.11.9"
+  } 
+}
